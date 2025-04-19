@@ -6,19 +6,6 @@ import sys
 # Style Check Implementations
 # --------------------------
 
-def check_tabs(lines, filename):
-    """Check for tab characters in source code (Rule A1)
-    Args:
-        lines: List of source code lines
-        filename: Name of current file
-    Returns:
-        List of violation messages
-    """
-    issues = []
-    for i, line in enumerate(lines, 1):
-        if '\t' in line:
-            issues.append(f"Line {i}: Tab character found (violates A1)")
-    return issues
 
 def check_block_comments(lines, filename):
     """Verify only single-line comments are used (Rule A4)
@@ -83,45 +70,7 @@ def check_operator_spacing(lines, filename):
             issues.append(f"Line {i}: Missing spaces around operator (violates CL5)")
     return issues
 
-def check_variable_naming(lines, filename):
-    """Validate variable prefix conventions (Rule DV1)
-    Args:
-        lines: List of source code lines
-        filename: Name of current file
-    Returns:
-        List of violation messages
-    """
-    issues = []
-    type_prefixes = {
-        'int': 'i', 'float': 'f', 'double': 'd', 'char': 'c',
-        'short': 's', 'long': 'l', 'uint32_t': 'u32', 'int32_t': 's32'
-    }
-    var_decl_pattern = re.compile(
-        r'\b(int|float|double|char|short|long|uint32_t|int32_t)\s+(?:const\s+)?(\w+)\b'
-    )
-    for i, line in enumerate(lines, 1):
-        match = var_decl_pattern.search(line)
-        if match:
-            var_type, var_name = match.groups()
-            prefix = type_prefixes.get(var_type, '')
-            if not var_name.startswith(prefix):
-                issues.append(f"Line {i}: Variable '{var_name}' should start with '{prefix}' (violates DV1)")
-    return issues
 
-def check_header_guards(lines, filename):
-    """Verify proper header guard usage (Rule P1)
-    Args:
-        lines: List of source code lines
-        filename: Name of current file
-    Returns:
-        List of violation messages
-    """
-    issues = []
-    if filename.endswith('.h'):
-        expected_guard = filename.upper().replace('.', '_')
-        if len(lines) < 2 or not lines[0].startswith(f'#ifndef {expected_guard}') or not lines[1].startswith(f'#define {expected_guard}'):
-            issues.append("Missing or incorrect header guard (violates P1)")
-    return issues
 
 # --------------------------
 # Main Program Logic
@@ -129,13 +78,10 @@ def check_header_guards(lines, filename):
 
 # Map rule IDs to check functions
 CHECKS = {
-    'A1': check_tabs,
     'A4': check_block_comments,
     'A7': check_file_length,
     'CL1': check_brace_placement,
-    'CL5': check_operator_spacing,
-    'DV1': check_variable_naming,
-    'P1': check_header_guards
+    'CL5': check_operator_spacing
 }
 
 def process_file(file_path, enabled_checks):
@@ -163,7 +109,10 @@ def main():
     """Main entry point for style checker"""
     if len(sys.argv) < 2:
         print("Usage: python style_checker.py <directory> [CHECKS...]")
-        print("Available checks: " + ", ".join(CHECKS.keys()))
+        print("Available checks:")
+        for check in CHECKS:
+            print(f"  - {check}: {CHECKS[check].__doc__.strip().splitlines()[0]}")
+        print("If no checks are specified, all checks will be run.")
         sys.exit(1)
 
     target_dir = sys.argv[1]
