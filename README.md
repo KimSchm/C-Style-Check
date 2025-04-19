@@ -1,10 +1,14 @@
+# Overview
+# C-Style-Converter
+C-Style-Converter ist ein Tool, das den C-Code automatisch dem in den C-Style-Check definierten Stil anpasst. 
+
 # C-Style-Check
 C-Style-Check ist ein Tool, das den C-Code auf Stilkonventionen überprüft.
 
 ## Checks
 - [x] A4: Kommentare beginnen mit einem //. Mehrzeilige Kommentare /* */ sind nicht erlaubt.
 - [x] A5: Dateinamen beginnen mit einem Großbuchstaben.
-- [x] A6: Eine Funktion darf maximal nur 4-40 Programmzeilen enthalten.
+- [x] A6: Eine Funktion darf maximal nur 40 Programmzeilen enthalten.
 - [x] A7: Eine C-Datei darf maximal nur 4-400 Zeilen enthalten.
 - [x] A8: Eine C-Datei (Modul) ist wie folgt aufgebaut:
    1. Systemheaderdateien (z.B. #include <stdio.h>)

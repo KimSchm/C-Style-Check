@@ -2,6 +2,9 @@ import re
 import os
 import sys
 
+# Verbose mode for debugging
+DEBUG = False
+
 # --------------------------
 # Style Check Implementations
 # --------------------------
@@ -41,7 +44,7 @@ def check_uppercase_filename(lines, filename):
     return issues
 
 def check_function_length(lines, filename):
-    """Check that functions are 4-40 lines long (Rule A6)
+    """Check that functions are not longer than 40 lines (Rule A6)
     Args:
         lines: List of source code lines
         filename: Name of current file
@@ -96,7 +99,7 @@ def check_function_length(lines, filename):
             # End of function detection
             if brace_count == 0:
                 function_length = i - function_start_line + 1
-                if function_length < 4 or function_length > 40:
+                if function_length > 40:
                     issues.append(f"Function '{function_name}' has {function_length} lines (violates A6: 4-40 lines)")
                 in_function = False
     
@@ -133,7 +136,6 @@ def check_file_structure(lines, filename):
         'system_headers': re.compile(r'^\s*#include\s*<.*>'),
         'user_headers': re.compile(r'^\s*#include\s*".*"'),
         'data_types': re.compile(r'^\s*(#define|const|enum|struct|union|typedef)'),
-        'globals': re.compile(r'^\s*(extern|[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=)'),
         'function_declarations': re.compile(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^{]*\)\s*;'),
         'function_implementations': re.compile(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^;]*\)\s*({|$)')
     }
@@ -155,6 +157,8 @@ def check_file_structure(lines, filename):
         for section, pattern in section_patterns.items():
             if pattern.match(line):
                 if section not in section_order:
+                    # Debug print section order and line
+                    if DEBUG:print(f"Found section '{section}' in {filename} at line {i}")
                     section_order.append(section)
                 break
     
@@ -183,6 +187,11 @@ def check_file_structure(lines, filename):
     
     # Check if sections appear in correct order
     last_section_idx = -1
+
+    # Debug print section order
+    if DEBUG:print(f"Section order in {filename}: {section_order}")
+    if DEBUG:print(f"Expected order: {expected_order}")
+
     for section in section_order:
         current_idx = expected_order.index(section)
         if current_idx < last_section_idx:
@@ -202,10 +211,9 @@ def check_brace_placement(lines, filename):
     issues = []
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped == '{' and i > 1:
-            prev_line = lines[i-2].strip()
-            if not (prev_line.endswith(')') or prev_line.endswith('{') or prev_line.endswith('}')):
-                issues.append(f"Line {i}: Opening brace on new line (violates CL1)")
+        # Check for opening brace on a new line
+        if '{' in stripped and not (stripped.startswith('{') or '=' in stripped):
+                issues.append(f"Line {i}: Opening brace are not on a new line (violates CL1)")
     return issues
 
 def check_operator_spacing(lines, filename):
@@ -219,8 +227,30 @@ def check_operator_spacing(lines, filename):
     issues = []
     operator_pattern = re.compile(r'(\S)(==|!=|<=|>=|=|\+|-|\*|/|&&|\|\|)(\S)')
     for i, line in enumerate(lines, 1):
-        if operator_pattern.search(line):
-            issues.append(f"Line {i}: Missing spaces around operator (violates CL5)")
+        for match in operator_pattern.finditer(line):
+            left_space = match.start(1) > 0 and line[match.start(1)-1] != ' '
+            right_space = match.end(3) < len(line) and line[match.end(3)] != ' '
+            # Check for spaces around the operator
+            if left_space or right_space:
+                # Check if its in a string
+                if not (line[:match.start(1)].count('"') % 2 == 0 and line[:match.start(1)].count("'") % 2 == 0):
+                    continue
+                # Check if its in a comment
+                if not (line[:match.start(1)].count('//') % 2 == 0 and line[:match.start(1)].count('/*') % 2 == 0):
+                    continue
+                # Check if its in a preprocessor directive
+                if not (line[:match.start(1)].count('#') % 2 == 0):
+                    continue
+                # Check if its a pointer
+                if not (line[:match.start(1)].count('*') % 2 == 0):
+                    continue
+                # Check if its a primary expression
+                if not (line[:match.start(1)].count('(') % 2 == 0 and line[:match.start(1)].count(')') % 2 == 0):
+                    continue
+                # Check if its an unary expression
+                if not (line[:match.start(1)].count('!') % 2 == 0 and line[:match.start(1)].count('&') % 2 == 0):
+                    continue
+                issues.append(f"Line {i}: Missing spaces around operator '{match.group(2)}' (violates CL5)")
     return issues
 
 def check_hungarian_notation(lines, filename):
@@ -238,7 +268,7 @@ def check_hungarian_notation(lines, filename):
     
     # Define Hungarian notation prefixes
     type_prefixes = {
-        'short int': 'si',
+        'short': 'si',
         'signed char': 'c',
         'unsigned short int': 'usi',
         'unsigned char': 'uc',
@@ -254,20 +284,36 @@ def check_hungarian_notation(lines, filename):
         'unsigned long long int': 'ulli'
     }
     
-    # Simplified regex to catch variable declarations
-    for type_name, prefix in type_prefixes.items():
-        pattern = re.compile(rf'\b{type_name}\s+([a-zA-Z_][a-zA-Z0-9_]*)\b')
-        
-        for i, line in enumerate(lines, 1):
-            # Skip preprocessor lines and comments
-            if line.strip().startswith('#') or line.strip().startswith('//'):
+    # Check for prefix in variable name and then checks if it is declared 
+    # if variable is declared without the prefix in its name than it is a violation
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        # Skip empty lines and comments
+        if not line or line.startswith('//') or line.startswith('#') or line.startswith('/*') or line.startswith('*'):
+            continue
+        # Skip lines that are not variable declarations
+        if not '=' in line:
+            continue
+        # Check if the line contains a variable declaration
+        if any(line.startswith(prefix) for prefix in type_prefixes.keys()):
+            # Split the line to get the variable declaration part
+            declaration = line.split('=')[0]
+            declaration = re.sub(r'\s+', ' ', declaration)
+            declaration = declaration.strip()
+            parts = declaration.split(' ')
+            if len(parts) < 2:
                 continue
-                
-            for match in pattern.finditer(line):
-                var_name = match.group(1)
+            var_type = ' '.join(parts[:-1])
+            var_name = parts[-1]
+            # Check if the type is in the Hungarian notation prefixes
+            if var_type in type_prefixes:
+                prefix = type_prefixes[var_type]
+                # Check if the variable name starts with the prefix
                 if not var_name.startswith(prefix):
-                    issues.append(f"Line {i}: Variable '{var_name}' should use Hungarian notation with prefix '{prefix}' (violates DV3 II)")
-    
+                    issues.append(f"Line {i}: Variable '{var_name}' does not follow Hungarian notation for '{var_type}' (violates DV3 II)")
+            else:
+                issues.append(f"Line {i}: Unknown type '{var_type}' (violates DV3 II)")
+
     return issues
 
 
@@ -309,13 +355,25 @@ def process_file(file_path, enabled_checks):
         issues.append("File encoding error - unable to process")
     return issues
 
+def print_checks(requested_checks=None):
+    """Print available checks and their descriptions"""
+    if requested_checks is None:
+        print("Available checks:")
+        for check_id, check_func in CHECKS.items():
+            print(f"  - {check_id}: {check_func.__doc__.strip().splitlines()[0]}")
+            return
+    print("Requested checks:")
+    for check_id in requested_checks:
+        if check_id in CHECKS:
+            print(f"  - {check_id}: {CHECKS[check_id].__doc__.strip().splitlines()[0]}")
+        else:
+            print(f"  - {check_id}: Not a valid check ID")
+
 def main():
     """Main entry point for style checker"""
     if len(sys.argv) < 2:
         print("Usage: python style_checker.py <directory> [CHECKS...]")
-        print("Available checks:")
-        for check in CHECKS:
-            print(f"  - {check}: {CHECKS[check].__doc__.strip().splitlines()[0]}")
+        print_checks()
         print("If no checks are specified, all checks will be run.")
         sys.exit(1)
 
@@ -329,16 +387,31 @@ def main():
         print(f"Available checks: {', '.join(CHECKS.keys())}")
         sys.exit(1)
 
+    # Validate target directory
+    if not os.path.isdir(target_dir):
+        print(f"Error: {target_dir} is not a valid directory.")
+        sys.exit(1)
+    if not os.access(target_dir, os.R_OK):
+        print(f"Error: {target_dir} is not readable.")
+        sys.exit(1)
+
     # Process files
+    print(f"Target directory: {target_dir}")
+    print_checks(requested_checks)
+    
     for root, _, files in os.walk(target_dir):
         for file in files:
             if file.endswith(('.c', '.cpp', '.h')):
+                print(f"\nProcessing {file}...")
                 file_path = os.path.join(root, file)
                 issues = process_file(file_path, requested_checks)
                 if issues:
-                    print(f"\nIssues in {file_path}:")
+                    print(f"Issues in {file_path}:")
                     for issue in issues:
                         print(f"  - {issue}")
+                else:
+                    print(f"No issues found in {file_path}")
+    print("\nStyle check completed.")
 
 if __name__ == "__main__":
     main()
