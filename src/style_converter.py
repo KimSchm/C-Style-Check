@@ -3,7 +3,7 @@ import os
 import sys
 
 # Verbose mode for debugging
-DEBUG = False
+DEBUG = True
 
 def convert_filename_to_uppercase(filename):
     """Convert first letter of filename to uppercase (Rule A5)
@@ -42,10 +42,19 @@ def place_braces_on_new_lines(lines):
         lines: All lines including conrrected lines
     """
     for i, line in enumerate(lines):
-        if line.strip().endswith("{") and len(line.strip()) > 1:
+        # ToDo: Does not check if it contains { with text after it
+        if ('{' in line.strip() and len(line.strip()) > 1) and not '}' in line.strip():
             if(DEBUG):print(f"Removing brace from line {i}, and placing it on line {i + 1}")
-            # Remove the brace from the current line
-            lines[i] = lines[i].replace("{", "")
+            # Check if there is there is text after the brace
+            if line.strip().endswith("{"):
+                # Remove the brace from the current line
+                lines[i] = line.replace("{", "")
+            else:
+                # Remove the brace from the current line
+                temp = line.split("{")
+                lines[i] = temp[0]
+                lines[i] = line.replace("{", "")
+                lines.insert(i+1, temp[1])
             # get the indentation of the current line
             indentation = re.match(r"^\s*", line).group(0)
             # Place the brace on the next line with indentation
@@ -130,6 +139,17 @@ def convert_variable_names_to_hungarian_notation(lines):
 
     return lines
 
+# --------------------------
+# Main Program Logic
+# --------------------------
+
+
+# Map rule IDs to check functions (exept for A5 - filename conversion is handled separately)
+CHECKS = {
+    'A4': convert_block_comments_to_single_line,
+    'CL1': place_braces_on_new_lines,
+    'DV3': convert_variable_names_to_hungarian_notation
+}
 
 def print_checks(requested_checks=None):
     """Print available checks and their descriptions"""
@@ -173,14 +193,6 @@ def convert_directory(directory, checks):
         for file in files:
             if file.endswith('.c') or file.endswith('.h'):
                 convert_file(root, file, checks)
-
-
-# Map rule IDs to check functions (exept for A5 - filename conversion is handled separately)
-CHECKS = {
-    'A4': convert_block_comments_to_single_line,
-    'CL1': place_braces_on_new_lines,
-    'DV3': convert_variable_names_to_hungarian_notation
-}
 
 def main():
     if len(sys.argv) < 2:
