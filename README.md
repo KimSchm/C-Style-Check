@@ -1,6 +1,34 @@
 # Overview
+
+## [C-Style-Converter](#c-style-converter)
+
+## [C-Style-Check](#c-style-check)
+
+
 # C-Style-Converter
 C-Style-Converter ist ein Tool, das den C-Code automatisch dem in den C-Style-Check definierten Stil anpasst.
+
+## Usage
+### Run the style converter on a directory
+```bash
+python style_converter.py <directory> [CHECKS...]
+```
+### Example: Run all checks on the "src" directory
+```bash
+python style_converter.py src
+```
+### Example: Run specific checks (A4 and CL1) on the "src" directory
+``` bash
+python style_converter.py src A4 CL1
+```
+### Example: Run all checks on a single file
+```bash
+python style_converter.py src/example.c
+```
+### Get Information about the available checks
+```bash
+python style_converter.py
+```
 
 ## Converter Checks
 - [x] A4: Convert block comments to single-line comments
@@ -10,6 +38,24 @@ C-Style-Converter ist ein Tool, das den C-Code automatisch dem in den C-Style-Ch
 
 # C-Style-Check
 C-Style-Check ist ein Tool, das den C-Code auf Stilkonventionen überprüft.
+
+## Usage
+### Run the style converter on a directory
+```bash
+python style_checker.py <directory> [CHECKS...]
+```
+### Example: Run all checks on the "src" directory
+```bash
+python style_checker.py src
+```
+### Example: Run specific checks (A4 and CL1) on the "src" directory
+``` bash
+python style_checker.py src A4 CL1
+```
+### Get Information about the available checks
+```bash
+python style_checker.py
+```
 
 ## Checks
 - [x] A4: Kommentare beginnen mit einem //. Mehrzeilige Kommentare /* */ sind nicht erlaubt.
