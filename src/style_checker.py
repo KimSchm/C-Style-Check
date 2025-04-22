@@ -225,7 +225,7 @@ def check_operator_spacing(lines, filename):
         List of violation messages
     """
     issues = []
-    operator_pattern = re.compile(r'(\S)(==|!=|<=|>=|=|\+|-|\*|/|&&|\|\|)(\S)')
+    operator_pattern = re.compile(r'(\S)(==|!=|<=|>=|=|\+|-|/|&&|\|\|)(\S)')
     for i, line in enumerate(lines, 1):
         for match in operator_pattern.finditer(line):
             left_space = match.start(1) > 0 and line[match.start(1)-1] != ' '
@@ -268,20 +268,22 @@ def check_hungarian_notation(lines, filename):
     
     # Define Hungarian notation prefixes
     type_prefixes = {
-        'short': 'si',
-        'signed char': 'c',
-        'unsigned short int': 'usi',
-        'unsigned char': 'uc',
         'int': 'i',
         'float': 'f',
-        'unsigned int': 'ui',
         'double': 'd',
-        'long int': 'li',
-        'long double': 'ld',
-        'unsigned long int': 'uli',
         '_Bool': 'b',
+        'short': 'si',
+        'signed char': 'c',
+        'char': 'c',
+        'short int': 'si',
+        'long int': 'li',
         'long long int': 'lli',
-        'unsigned long long int': 'ulli'
+        'long double': 'ld',
+        'unsigned short int': 'usi',
+        'unsigned char': 'uc',
+        'unsigned int': 'ui',
+        'unsigned long int': 'uli',
+        'unsigned long long int': 'ulli',
     }
     
     # Check for prefix in variable name and then checks if it is declared 
