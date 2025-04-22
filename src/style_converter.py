@@ -44,21 +44,29 @@ def place_braces_on_new_lines(lines):
     for i, line in enumerate(lines):
         # ToDo: Does not check if it contains { with text after it
         if ('{' in line.strip() and len(line.strip()) > 1) and not '}' in line.strip():
-            if(DEBUG):print(f"Removing brace from line {i}, and placing it on line {i + 1}")
             # Check if there is there is text after the brace
-            if line.strip().endswith("{"):
+            print(f"Checking line {i + 1}: {line} = {line.endswith('{')}")
+            if line.endswith("{"):
+                if(DEBUG):print(f"Removing brace from line {i}, and placing it on line {i + 1}")
                 # Remove the brace from the current line
                 lines[i] = line.replace("{", "")
+                # get the indentation of the current line
+                indentation = re.match(r"^\s*", line).group(0)
+                # Place the brace on the next line with indentation
+                lines.insert(i+1, indentation + "{")
             else:
+                continue
                 # Remove the brace from the current line
                 temp = line.split("{")
-                lines[i] = temp[0]
-                lines[i] = line.replace("{", "")
-                lines.insert(i+1, temp[1])
-            # get the indentation of the current line
-            indentation = re.match(r"^\s*", line).group(0)
-            # Place the brace on the next line with indentation
-            lines.insert(i+1, indentation + "{")
+                if(DEBUG):
+                    print(f"Splitting line {i} into:")
+                    for t in temp: print(f"  - {t}")
+                indentation = re.match(r"^\s*", lines[i]).group(0)
+                lines[i] = indentation+temp[0].strip()
+                indentation = re.match(r"^\s*", lines[i+1]).group(0)
+                next_line = indentation+"{"+temp[1]
+                lines.insert(i+1, next_line)
+                i += 1
     return lines
 
 def convert_variable_names_to_hungarian_notation(lines):
@@ -91,7 +99,7 @@ def convert_variable_names_to_hungarian_notation(lines):
 
     sorted_types = sorted(type_prefixes.keys(), key=lambda x: len(x), reverse=True)
     # Define regex pattern for variable declarations
-    var_decl_pattern = re.compile(r'(\b(?:' + '|'.join(sorted_types) + r')\s*\**?\s+)(\w+)\s*=')
+    var_decl_pattern = re.compile(r'(\b(?:' + '|'.join(sorted_types) + r')\s*\**?\s+)(\w+)(\[\d*\])?\s*=')
     # Patterns to compare after variable declaration pattern is compared to determine extra declarations
     # Define regex pattern for pointer declarations
     pointer_decl_pattern = re.compile(r'(\b(?:' + '|'.join(type_prefixes.keys()) + r')\*+)')

@@ -254,6 +254,75 @@ def check_operator_spacing(lines, filename):
     return issues
 
 def check_hungarian_notation(lines, filename):
+    """Check that variable names use Hungarian notation (Rule DV3)
+    Args:
+        lines: List of source code lines
+        filename: Name of current file
+    Returns:
+        List of violation messages
+    """
+    if not (filename.endswith('.c') or filename.endswith('.h') or filename.endswith('.cpp')):
+        return []
+
+    issues = []
+
+    # Define Hungarian notation prefixes
+    type_prefixes = {
+        'int': 'i',
+        'float': 'f',
+        'double': 'd',
+        '_Bool': 'b',
+        'short': 'si',
+        'signed char': 'c',
+        'char': 'c',
+        'short int': 'si',
+        'long int': 'li',
+        'long long int': 'lli',
+        'long double': 'ld',
+        'unsigned short int': 'usi',
+        'unsigned char': 'uc',
+        'unsigned int': 'ui',
+        'unsigned long int': 'uli',
+        'unsigned long long int': 'ulli',
+    }
+
+    # Regex to detect variable declarations
+    sorted_types = sorted(type_prefixes.keys(), key=lambda x: len(x), reverse=True)
+    var_decl_pattern = re.compile(r'(\b(?:' + '|'.join(sorted_types) + r')\s*\**?\s+)(\w+)(\[\d*\])?')
+
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        # Skip empty lines, comments, and preprocessor directives
+        if not line or line.startswith('//') or line.startswith('#') or line.startswith('/*') or line.startswith('*') or '=' not in line:
+            continue
+
+        # Check for variable declarations
+        match = var_decl_pattern.search(line)
+        if match:
+            var_type = match.group(1).strip()
+            var_name = match.group(2).strip()
+            is_array = match.group(3) is not None
+
+            # Determine the expected prefix
+            expected_prefix = type_prefixes.get(var_type.replace('*', ''), '')
+            if is_array:
+                expected_prefix = 'a' + expected_prefix
+            if '*' in var_type:
+                expected_prefix = 'p' + expected_prefix
+
+            # Check if the variable name starts with the expected prefix
+            if not var_name.startswith(expected_prefix):
+                issues.append(
+                    f"Line {i}: Variable '{var_name}' does not follow Hungarian notation for type '{var_type}' (violates DV3)"
+                )
+
+    return issues
+    
+    
+
+    return issues
+
+def check_hungarian_notation_deprecated(lines, filename):
     """Check that variable names use Hungarian notation (Rule DV3 II)
     Args:
         lines: List of source code lines
@@ -344,6 +413,13 @@ def process_file(file_path, enabled_checks):
     Returns:
         List of all detected issues
     """
+    print(f"\nProcessing file: {file_path}")
+    # Validate file path
+    if not os.path.isfile(file_path):
+        print(f"Error: {file_path} is not a valid file.")
+        return []
+    
+    # Process file
     issues = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -352,10 +428,36 @@ def process_file(file_path, enabled_checks):
             
             for check_id in enabled_checks:
                 if check_id in CHECKS:
+                    if(DEBUG):print(f"Running check {check_id} on {filename}")
                     issues += CHECKS[check_id](lines, filename)
     except UnicodeDecodeError:
         issues.append("File encoding error - unable to process")
     return issues
+
+def process_directory(target_dir, requested_checks):
+    """Process all files in the target directory
+    Args:
+        target_dir: Directory to process
+        requested_checks: List of check IDs to execute
+    """
+    print(f"\nProcessing directory: {target_dir}")
+    # Validate target directory
+    if not os.path.isdir(target_dir):
+        print(f"Error: {target_dir} is not a valid directory.")
+        sys.exit(1)
+
+    # Process each file in the directory
+    for root, _, files in os.walk(target_dir):
+        for file in files:
+            if file.endswith(('.c', '.cpp', '.h')):
+                file_path = os.path.join(root, file)
+                issues = process_file(file_path, requested_checks)
+                if issues:
+                    print(f"Issues in {file_path}:")
+                    for issue in issues:
+                        print(f"  - {issue}")
+                else:
+                    print(f"No issues found in {file_path}")
 
 def print_checks(requested_checks=None):
     """Print available checks and their descriptions"""
@@ -371,48 +473,52 @@ def print_checks(requested_checks=None):
         else:
             print(f"  - {check_id}: Not a valid check ID")
 
+def validate_checks(checks):
+    """Validate requested checks against available checks and print them
+    Args:
+        checks: List of check IDs to validate
+    Returns:
+        List of invalid check IDs
+    """
+    invalid = [c for c in checks if c not in CHECKS]
+    if invalid:
+        print(f"Invalid check IDs: {', '.join(invalid)}")
+        print(f"Available checks: {', '.join(CHECKS.keys())}")
+        sys.exit(1)
+    else :
+        print_checks(checks)
+    return checks
+
 def main():
     """Main entry point for style checker"""
+    # Check if enough arguments are provided
     if len(sys.argv) < 2:
         print("Usage: python style_checker.py <directory> [CHECKS...]")
         print_checks()
         print("If no checks are specified, all checks will be run.")
         sys.exit(1)
-
+    # Get target directory and requested checks from command line arguments
     target_dir = sys.argv[1]
     requested_checks = sys.argv[2:] if len(sys.argv) > 2 else CHECKS.keys()
-    
-    # Validate requested checks
-    invalid = [c for c in requested_checks if c not in CHECKS]
-    if invalid:
-        print(f"Invalid check IDs: {', '.join(invalid)}")
-        print(f"Available checks: {', '.join(CHECKS.keys())}")
-        sys.exit(1)
-
-    # Validate target directory
-    if not os.path.isdir(target_dir):
-        print(f"Error: {target_dir} is not a valid directory.")
-        sys.exit(1)
-    if not os.access(target_dir, os.R_OK):
-        print(f"Error: {target_dir} is not readable.")
-        sys.exit(1)
-
-    # Process files
-    print(f"Target directory: {target_dir}")
-    print_checks(requested_checks)
-    
-    for root, _, files in os.walk(target_dir):
-        for file in files:
-            if file.endswith(('.c', '.cpp', '.h')):
-                print(f"\nProcessing {file}...")
-                file_path = os.path.join(root, file)
-                issues = process_file(file_path, requested_checks)
-                if issues:
-                    print(f"Issues in {file_path}:")
-                    for issue in issues:
-                        print(f"  - {issue}")
-                else:
-                    print(f"No issues found in {file_path}")
+    # Validate requested checks and print them
+    validate_checks(requested_checks)
+    # Check if the target is a file or directory and process accordingly
+    is_file = os.path.isfile(target_dir)
+    if not is_file:
+        if os.path.isdir(target_dir):
+            process_directory(target_dir, requested_checks)
+        else:
+            print(f"Error: {target_dir} is not a valid file or directory.")
+            sys.exit(1)
+    else:
+        # Process files
+        issues = process_file(target_dir, requested_checks)
+        if issues:
+            print(f"Issues in {target_dir}:")
+            for issue in issues:
+                print(f"  - {issue}")
+        else:
+            print(f"No issues found in {target_dir}")
     print("\nStyle check completed.")
 
 if __name__ == "__main__":
