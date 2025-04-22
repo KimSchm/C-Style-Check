@@ -1,131 +1,230 @@
 import re
 import os
+import sys
 
-def convert_block_comments_to_single_line(content):
-    """Convert block comments to single-line comments"""
-    content = re.sub(r'/\*', '//', content)
-    content = re.sub(r'\*/', '', content)
-    return content
+# Verbose mode for debugging
+DEBUG = False
 
 def convert_filename_to_uppercase(filename):
-    """Convert file names to start with uppercase letters"""
-    base_name = os.path.basename(filename)
-    new_name = base_name[0].upper() + base_name[1:]
-    return new_name
+    """Convert first letter of filename to uppercase (Rule A5)
+    Args:
+        filename: Name of current file
+    Returns:
+        filename: Converted filename
+    """
+    if filename[0].islower():
+        filename = filename[0].upper() + filename[1:]
+    return filename
 
-def split_long_functions(content):
-    """Split functions longer than 40 lines"""
-    lines = content.split('\n')
-    new_content = []
-    in_function = False
-    function_lines = []
-    for line in lines:
-        if re.match(r'^\s*\w+\s+\w+\s*\([^)]*\)\s*{', line):
-            in_function = True
-            function_lines = [line]
-        elif in_function:
-            function_lines.append(line)
-            if line.strip() == '}':
-                in_function = False
-                if len(function_lines) > 40:
-                    new_content.extend(function_lines[:40])
-                    new_content.append('// Function split due to length')
-                    new_content.extend(function_lines[40:])
-                else:
-                    new_content.extend(function_lines)
-        else:
-            new_content.append(line)
-    return '\n'.join(new_content)
+def convert_block_comments_to_single_line(lines):
+    """Convert block comments to single-line comments (Rule A4)
+    Args:
+        lines: List of source code lines
+    Returns:
+        lines: All lines including conrrected lines
+    """
+    for i, line in enumerate(lines):
+        if line.strip().startswith("/*"):
+            if(DEBUG):print(f"Converting block comment to single-line comment at line {i + 1}")
+            lines[i] = line.replace("/*", "//")
+            while i + 1 < len(lines) and not lines[i + 1].strip().endswith("*/"):
+                lines[i + 1] = lines[i + 1].replace("*", "").strip()
+                lines[i] = lines[i] + " " + lines[i + 1]
+                lines.pop(i + 1)
+            lines[i+1] = lines[i+1].replace("*/", "").strip()    
+    return lines
 
-def ensure_file_length(content):
-    """Ensure file length is between 4 and 400 lines"""
-    lines = content.split('\n')
-    if len(lines) < 4:
-        lines.extend([''] * (4 - len(lines)))
-    elif len(lines) > 400:
-        lines = lines[:400]
-    return '\n'.join(lines)
+def place_braces_on_new_lines(lines):
+    """Place braces on new lines (Rule CL1)
+    Args:
+        lines: List of source code lines
+    Returns:
+        lines: All lines including conrrected lines
+    """
+    for i, line in enumerate(lines):
+        if line.strip().endswith("{") and len(line.strip()) > 1:
+            if(DEBUG):print(f"Removing brace from line {i}, and placing it on line {i + 1}")
+            # Remove the brace from the current line
+            lines[i] = lines[i].replace("{", "")
+            # get the indentation of the current line
+            indentation = re.match(r"^\s*", line).group(0)
+            # Place the brace on the next line with indentation
+            lines.insert(i+1, indentation + "{")
+    return lines
 
-def reorder_sections(content):
-    """Reorder sections in a C file"""
-    lines = content.split('\n')
-    system_headers = []
-    user_headers = []
-    data_types = []
-    globals = []
-    function_declarations = []
-    function_implementations = []
-    current_section = None
+def convert_variable_names_to_hungarian_notation(lines):
+    """Convert variable names to Hungarian notation (Rule DV3)
+    Args:
+        lines: List of source code lines
+    Returns:
+        lines: All lines including conrrected lines
+    """
 
-    for line in lines:
-        if re.match(r'^\s*#include\s*<.*>', line):
-            current_section = 'system_headers'
-            system_headers.append(line)
-        elif re.match(r'^\s*#include\s*".*"', line):
-            current_section = 'user_headers'
-            user_headers.append(line)
-        elif re.match(r'^\s*(#define|const|enum|struct|union|typedef)', line):
-            current_section = 'data_types'
-            data_types.append(line)
-        elif re.match(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^{]*\)\s*;', line):
-            current_section = 'function_declarations'
-            function_declarations.append(line)
-        elif re.match(r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\([^;]*\)\s*{', line):
-            current_section = 'function_implementations'
-            function_implementations.append(line)
-        else:
-            if current_section == 'system_headers':
-                system_headers.append(line)
-            elif current_section == 'user_headers':
-                user_headers.append(line)
-            elif current_section == 'data_types':
-                data_types.append(line)
-            elif current_section == 'function_declarations':
-                function_declarations.append(line)
-            elif current_section == 'function_implementations':
-                function_implementations.append(line)
-
-    new_content = system_headers + user_headers + data_types + globals + function_declarations + function_implementations
-    return '\n'.join(new_content)
-
-def place_braces_on_new_lines(content):
-    """Place braces on new lines"""
-    content = re.sub(r'\s*{\s*', '\n{\n', content)
-    content = re.sub(r'\s*}\s*', '\n}\n', content)
-    return content
-
-def add_spaces_around_operators(content):
-    """Add spaces around operators"""
-    content = re.sub(r'(\S)(==|!=|<=|>=|=|\+|-|\*|/|&&|\|\|)(\S)', r'\1 \2 \3', content)
-    return content
-
-def convert_variable_names_to_hungarian_notation(content):
-    """Convert variable names to Hungarian notation"""
+    # Define Hungarian notation prefixes
     type_prefixes = {
-        'short': 'si',
-        'signed char': 'c',
-        'unsigned short int': 'usi',
-        'unsigned char': 'uc',
         'int': 'i',
         'float': 'f',
-        'unsigned int': 'ui',
         'double': 'd',
-        'long int': 'li',
-        'long double': 'ld',
         '_Bool': 'b',
+        'short': 'si',
+        'signed char': 'c',
+        'char': 'c',
+        'short int': 'si',
+        'long int': 'li',
         'long long int': 'lli',
-        'unsigned long long int': 'ulli'
+        'long double': 'ld',
+        'unsigned short int': 'usi',
+        'unsigned char': 'uc',
+        'unsigned int': 'ui',
+        'unsigned long int': 'uli',
+        'unsigned long long int': 'ulli',
     }
 
-    lines = content.split('\n')
-    new_lines = []
-    for line in lines:
-        for var_type, prefix in type_prefixes.items():
-            pattern = re.compile(r'\b' + var_type + r'\b\s+(\w+)')
-            match = pattern.search(line)
-            if match:
-                var_name = match.group(1)
-                new_var_name = prefix + var_name
-                line = line.replace(var_name, new_var_name)
-        new_lines.append(line)
-    return '\n'.join(new_lines)
+    sorted_types = sorted(type_prefixes.keys(), key=lambda x: len(x), reverse=True)
+    # Define regex pattern for variable declarations
+    var_decl_pattern = re.compile(r'(\b(?:' + '|'.join(sorted_types) + r')\s*\**?\s+)(\w+)\s*=')
+    # Patterns to compare after variable declaration pattern is compared to determine extra declarations
+    # Define regex pattern for pointer declarations
+    pointer_decl_pattern = re.compile(r'(\b(?:' + '|'.join(type_prefixes.keys()) + r')\*+)')
+    # Define regex pattern for array declarations
+    array_decl_pattern = re.compile(r'(\b(?:' + '|'.join(type_prefixes.keys()) + r')\s+\w+\s*\[\s*\d+\s*\])')
+    # if wrongly declared variable is found, it will be added to this dict with the correct name to find all occurrences of them later to replace with correct names
+    wrong_var_names = {}
+    for i, line in enumerate(lines):
+        # Check for variable declarations
+        match = var_decl_pattern.search(line)
+        if match:
+            if(DEBUG):print(f"Checking line {i + 1}: {line.strip()}\tMatch: {match}")
+            # Check for pointer or array declarations
+            pointer_match = pointer_decl_pattern.search(line)
+            array_match = array_decl_pattern.search(line)
+            # Extract the variable type and name
+            var_type = match.group(1).strip()
+            var_name = match.group(2).strip()
+            if(DEBUG):print(f"Variable type: {var_type}, Variable name: {var_name}")
+            # Expected prefix for the variable type
+            expected_prefix = type_prefixes.get(var_type, '')
+            if array_match:
+                # If it's an array, add 'a' prefix
+                expected_prefix = 'a' + expected_prefix
+            if pointer_match:
+                # If it's a pointer, add 'p' prefix
+                expected_prefix = 'p' + expected_prefix
+            # Check if the variable name is already in Hungarian notation
+            if not var_name.startswith(expected_prefix):
+                # Convert to Hungarian notation
+                new_var_name = type_prefixes[var_type.replace('*','')] + var_name[0].upper() + var_name[1:]
+                if array_match:
+                    new_var_name = 'a' + new_var_name
+                if pointer_match:
+                    new_var_name = 'p' + new_var_name
+                wrong_var_names[var_name] = new_var_name
+                lines[i] = line.replace(var_name, new_var_name)
+                if(DEBUG):print(f"Converting variable name '{var_name}' to '{new_var_name}' at line {i + 1}")
+    # Replace all occurrences of the wrong variable names with the correct ones
+    for i, line in enumerate(lines):
+        for wrong_name, correct_name in wrong_var_names.items():
+            if wrong_name in line:
+                lines[i] = line.replace(wrong_name, correct_name)
+                if(DEBUG):print(f"Replacing '{wrong_name}' with '{correct_name}' at line {i + 1}")
+
+    return lines
+
+
+def print_checks(requested_checks=None):
+    """Print available checks and their descriptions"""
+    if requested_checks is None:
+        print("Available checks:")
+        for check_id, check_func in CHECKS.items():
+            print(f"  - {check_id}: {check_func.__doc__.strip().splitlines()[0]}")
+        return
+    print("Requested checks:")
+    for check_id in requested_checks:
+        if check_id in CHECKS:
+            print(f"  - {check_id}: {CHECKS[check_id].__doc__.strip().splitlines()[0]}")
+        else:
+            print(f"  - {check_id}: Not a valid check ID")
+
+def convert_file(file_path, filename, checks):
+    """Convert a file based on the specified checks"""
+    print(f"\nConverting file {filename} in directory: {file_path}")
+    with open(os.path.join(file_path, filename), 'r') as file:
+        content = file.read()
+    lines = content.splitlines()
+    for check in checks:
+        if check in CHECKS:
+            print(f"Running check {check} on file {filename}")
+            lines = CHECKS[check](lines)
+    
+    out = os.path.join(file_path, "output")
+    if not os.path.exists(out):
+        os.makedirs(out)
+    # Convert filename (Rule A5)
+    filename = convert_filename_to_uppercase(filename)
+    out = os.path.join(out, filename)
+    with open(out, 'w') as file:
+        file.write("\n".join(lines))
+    print(f"Converted file saved as {out}")
+
+def convert_directory(directory, checks):
+    """Convert all files in a directory based on the specified checks"""
+    print(f"Converting files in directory: {directory}")
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.c') or file.endswith('.h'):
+                convert_file(root, file, checks)
+
+
+# Map rule IDs to check functions (exept for A5 - filename conversion is handled separately)
+CHECKS = {
+    'A4': convert_block_comments_to_single_line,
+    'CL1': place_braces_on_new_lines,
+    'DV3': convert_variable_names_to_hungarian_notation
+}
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python style_converter.py <directory> [CHECKS...]")
+        print_checks()
+        print("If no checks are specified, all checks will be run.")
+        sys.exit(1)
+
+    directory = sys.argv[1]
+    checks = sys.argv[2:] if len(sys.argv) > 2 else CHECKS.keys()
+    
+    # Validate requested checks
+    invalid = [c for c in checks if c not in CHECKS]
+    if invalid:
+        print(f"Invalid check IDs: {', '.join(invalid)}")
+        print(f"Available checks: {', '.join(CHECKS.keys())}")
+        sys.exit(1)
+
+    isFile = False;
+
+    # Validate target directory
+    if not os.path.isdir(directory):
+        if not os.path.isfile(directory) and not os.path.isdir(directory):
+            print(f"Error: {directory} is not a valid directory or file.")
+            sys.exit(1)
+        else:
+            isFile = True;
+    if not os.access(directory, os.W_OK):
+        print(f"Error: {directory} is not writable.")
+        sys.exit(1)
+    if not os.access(directory, os.R_OK):
+        print(f"Error: {directory} is not readable.")
+        sys.exit(1)
+
+    if isFile:
+        # Convert a single file
+        dir = os.path.dirname(directory)
+        file = os.path.basename(directory)
+        convert_file(dir, file, checks)
+        sys.exit(0)
+    else:
+        # Convert all files in the directory
+        convert_directory(directory, checks)
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()

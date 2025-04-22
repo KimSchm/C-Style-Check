@@ -1,6 +1,12 @@
 # Overview
 # C-Style-Converter
-C-Style-Converter ist ein Tool, das den C-Code automatisch dem in den C-Style-Check definierten Stil anpasst. 
+C-Style-Converter ist ein Tool, das den C-Code automatisch dem in den C-Style-Check definierten Stil anpasst.
+
+## Converter Checks
+- [x] A4: Convert block comments to single-line comments
+- [x] A5: Convert file names to start with a capital letter
+- [x] CL1: Place braces on new lines
+- [x] DV3: Convert variable names to Hungarian notation
 
 # C-Style-Check
 C-Style-Check ist ein Tool, das den C-Code auf Stilkonventionen überprüft.
